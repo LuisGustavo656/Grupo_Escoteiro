@@ -116,13 +116,22 @@ app.get(
 );
 app.get("/criar-coluna-secreta", async (req, res) => {
   try {
+    // 1. Cria a coluna de primeiro acesso no banco
     await pool.query(
       "ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT TRUE;"
     );
-    res.send("🎉 Sucesso! A coluna 'must_change_password' foi criada com sucesso no banco da Render!");
+    
+    // 2. Transforma o 'admin' em 'presidente' e desativa a troca de senha para você
+    await pool.query(
+      `UPDATE users 
+       SET global_role = 'presidente', must_change_password = false 
+       WHERE global_role = 'admin';`
+    );
+
+    res.send("🎉 Sucesso! A coluna foi criada E o seu usuário 'admin' agora é 'presidente' oficial!");
   } catch (error) {
     console.error(error);
-    res.status(500).send("❌ Erro ao criar coluna: " + error.message);
+    res.status(500).send("❌ Erro na migração: " + error.message);
   }
 });
 app.listen(PORT, () => {
