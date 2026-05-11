@@ -21,7 +21,43 @@ app.use('/users', userRoutes);
 app.use('/finances', financeRoutes);
 app.use('/members', memberRoutes);
 app.use('/patrols', patrolRoutes);
+// ====== MIDDLEWARES DE SEGURANÇA ======
 
+// 1. Verifica se o token JWT do usuário é válido
+function autenticarToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Pega o token após a palavra "Bearer"
+
+  if (!token) {
+    return res.status(401).json({ error: "Acesso negado. Token não fornecido." });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: "Token inválido ou expirado." });
+    }
+    req.user = user; // Salva as informações do usuário logado na requisição (ex: id, global_role)
+    next();
+  });
+}
+
+// 2. Verifica se o cargo do usuário logado é permitido para a rota
+const verificarCargo = (cargosPermitidos) => {
+  return (req, res, next) => {
+    // req.user foi preenchido logo acima pelo 'autenticarToken'
+    const usuarioCargo = req.user ? req.user.global_role : null; 
+
+    if (!usuarioCargo || !cargosPermitidos.includes(usuarioCargo)) {
+      return res.status(403).json({ 
+        error: "Acesso negado. Você não tem o nível de permissão necessário." 
+      });
+    }
+
+    next();
+  };
+};
+
+// ======================================
 
 app.get("/test", async (req, res) => {
   const result = await pool.query("SELECT NOW()");
