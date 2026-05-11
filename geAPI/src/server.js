@@ -12,6 +12,7 @@ const financeRoutes = require('./modules/finances/financeRoutes');
 const authRoutes = require('./modules/auth/authRoutes');
 const memberRoutes = require('./modules/members/memberRoutes');
 const patrolRoutes = require('./modules/patrols/patrolRoutes');
+const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use('/auth', authRoutes);
@@ -26,21 +27,22 @@ app.get("/test", async (req, res) => {
   const result = await pool.query("SELECT NOW()");
   res.json(result.rows[0]);
 });
-app.post("/register", async (req, res) => {
+app.post("/register", autenticarToken, verificarCargo(["presidente"]), async (req, res) => {
   try {
     const { name, email, password, global_role } = req.body;
+    const cargoFinal = global_role || "chefe";
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Salvamos com must_change_password = true
     const result = await pool.query(
-      `INSERT INTO users (name, email, password, global_role)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, name, email, global_role`,
-      [name, email, hashedPassword, global_role]
+      `INSERT INTO users (name, email, password, global_role, must_change_password)
+       VALUES ($1, $2, $3, $4, true)
+       RETURNING id, name, email, global_role, must_change_password`,
+      [name, email, hashedPassword, cargoFinal]
     );
 
     res.status(201).json(result.rows[0]);
-
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Erro ao criar usuário" });
@@ -69,24 +71,35 @@ app.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Senha inválida" });
     }
 
+    // 1. Incluímos o 'must_change_password' no payload do JWT
     const token = jwt.sign(
       {
         id: user.id,
         global_role: user.global_role,
         branch_id: user.branch_id,
-        branch_role: user.branch_role
+        branch_role: user.branch_role,
+        must_change_password: user.must_change_password // Guardado de forma segura no Token
       },
       process.env.JWT_SECRET,
       { expiresIn: "8h" }
     );
 
-    res.json({ token });
+    // 2. Devolvemos o token E os dados do usuário para o front-end
+    res.json({ 
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        global_role: user.global_role,
+        mustChangePassword: user.must_change_password 
+      }
+    });
 
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Erro no login" });
+    res.status(500).json({ error: "Erro no servidor ao tentar fazer login" });
   }
-});
+}); 
 app.get("/me", authMiddleware, (req, res) => {
   res.json({
     message: "Rota protegida funcionando",
@@ -101,6 +114,17 @@ app.get(
     res.json({ message: "Você é ADMIN 😎" });
   }
 );
-app.listen(process.env.PORT, () => {
-  console.log(`Servidor rodando na porta ${process.env.PORT}`);
+app.get("/criar-coluna-secreta", async (req, res) => {
+  try {
+    await pool.query(
+      "ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT TRUE;"
+    );
+    res.send("🎉 Sucesso! A coluna 'must_change_password' foi criada com sucesso no banco da Render!");
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("❌ Erro ao criar coluna: " + error.message);
+  }
+});
+app.listen(PORT, () => {
+  console.log(`Servidor rodando na porta ${PORT}`);
 });
