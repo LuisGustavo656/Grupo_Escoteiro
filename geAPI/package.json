@@ -1,14 +1,15 @@
 {
   "name": "geapi",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "src/server.js",
   "scripts": {
+    "start": "node src/server.js",
     "dev": "nodemon src/server.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "API para o GE Fortaleza de Itaipu 455",
   "dependencies": {
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",

@@ -8,5 +8,6 @@ router.post('/', authMiddleware, memberController.createMember);
 router.get('/', authMiddleware, memberController.getAllMembers);
 router.get('/branch/:branch_id', authMiddleware, memberController.getMembersByBranch);
 router.put('/:id', authMiddleware, memberController.updateMember);
+router.put('/:id/skills', memberController.updateMemberSkills);
 
 module.exports = router;
