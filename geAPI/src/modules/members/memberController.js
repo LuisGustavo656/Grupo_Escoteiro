@@ -1,14 +1,22 @@
 const pool = require("../../config/database");
 
+// Criar membro já com as notas direto no POST
 exports.createMember = async (req, res) => {
-  const { name, date_of_birth, registration_number, branch_id, responsible_id, patrol_id } = req.body;
+  const { 
+    name, date_of_birth, registration_number, branch_id, 
+    responsible_id, patrol_id, skill_fisico, skill_tecnico, skill_experiencia 
+  } = req.body;
 
   try {
     const result = await pool.query(
-      `INSERT INTO members (name, date_of_birth, registration_number, branch_id, responsible_id, patrol_id) 
-       VALUES ($1, $2, $3, $4, $5, $6) 
+      `INSERT INTO members 
+       (name, date_of_birth, registration_number, branch_id, responsible_id, patrol_id, skill_fisico, skill_tecnico, skill_experiencia) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
        RETURNING *`,
-      [name, date_of_birth, registration_number, branch_id, responsible_id, patrol_id]
+      [
+        name, date_of_birth, registration_number, branch_id, responsible_id, patrol_id,
+        skill_fisico || 1, skill_tecnico || 1, skill_experiencia || 1 // Caso não envie, adota 1 por padrão
+      ]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -76,7 +84,7 @@ exports.updateMember = async (req, res) => {
     }
 
     res.json({
-      message: "Membro atualizado com sucesso!",
+      message: "Membro updated com sucesso!",
       member: result.rows[0]
     });
   } catch (err) {
@@ -119,6 +127,7 @@ exports.updateMemberSkills = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
 // Cadastro em Massa para o Algoritmo de ML
 exports.createMembersBulk = async (req, res) => {
   const members = req.body;
