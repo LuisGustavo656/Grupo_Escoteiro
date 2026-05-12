@@ -172,3 +172,25 @@ exports.createMembersBulk = async (req, res) => {
     client.release();
   }
 };
+// Excluir um escoteiro específico (Ex: Em caso de erro no cadastro ou desistência)
+exports.deleteMember = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      `DELETE FROM members WHERE id = $1 RETURNING *`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Membro não encontrado." });
+    }
+
+    res.json({
+      message: `Membro '${result.rows[0].name}' excluído com sucesso!`,
+      deletedMember: result.rows[0]
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};

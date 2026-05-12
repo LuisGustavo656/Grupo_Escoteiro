@@ -9,5 +9,6 @@ router.get('/', authMiddleware, memberController.getAllMembers);
 router.get('/branch/:branch_id', authMiddleware, memberController.getMembersByBranch);
 router.put('/:id', authMiddleware, memberController.updateMember);
 router.put('/:id/skills', memberController.updateMemberSkills);
+router.delete('/:id', authMiddleware, memberController.deleteMember);
 
 module.exports = router;
