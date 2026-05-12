@@ -15,7 +15,7 @@ exports.createMember = async (req, res) => {
        RETURNING *`,
       [
         name, date_of_birth, registration_number, branch_id, responsible_id, patrol_id,
-        skill_fisico || 1, skill_tecnico || 1, skill_experiencia || 1 // Caso não envie, adota 1 por padrão
+        skill_fisico || 1, skill_tecnico || 1, skill_experiencia || 1
       ]
     );
     res.status(201).json(result.rows[0]);
@@ -24,6 +24,7 @@ exports.createMember = async (req, res) => {
   }
 };
 
+// Listar todos os membros com joins
 exports.getAllMembers = async (req, res) => {
   try {
     const result = await pool.query(`
@@ -44,7 +45,7 @@ exports.getAllMembers = async (req, res) => {
   }
 };
 
-// Essencial para a chefia gerir apenas o seu próprio ramo:
+// Filtrar membros por Ramo (Chefia)
 exports.getMembersByBranch = async (req, res) => {
   const { branch_id } = req.params;
   try {
@@ -65,7 +66,7 @@ exports.getMembersByBranch = async (req, res) => {
   }
 };
 
-// Atualizar os dados de um jovem (Ex: Passagem de Ramo)
+// Atualizar os dados cadastrais de um jovem
 exports.updateMember = async (req, res) => {
   const { id } = req.params;
   const { name, date_of_birth, registration_number, branch_id, responsible_id, patrol_id } = req.body;
@@ -84,7 +85,7 @@ exports.updateMember = async (req, res) => {
     }
 
     res.json({
-      message: "Membro updated com sucesso!",
+      message: "Membro atualizado com sucesso!",
       member: result.rows[0]
     });
   } catch (err) {
@@ -92,12 +93,11 @@ exports.updateMember = async (req, res) => {
   }
 };
 
-// Lançar ou atualizar as notas de um jovem (Para a ML usar depois)
+// Lançar ou atualizar apenas as notas (Skills)
 exports.updateMemberSkills = async (req, res) => {
   const { id } = req.params;
   const { skill_fisico, skill_tecnico, skill_experiencia } = req.body;
 
-  // Validação de Segurança: Garante que as notas fiquem entre 1 e 10
   if (
     skill_fisico < 1 || skill_fisico > 10 ||
     skill_tecnico < 1 || skill_tecnico > 10 ||
@@ -172,7 +172,8 @@ exports.createMembersBulk = async (req, res) => {
     client.release();
   }
 };
-// Excluir um escoteiro específico (Ex: Em caso de erro no cadastro ou desistência)
+
+// Excluir um escoteiro específico por ID
 exports.deleteMember = async (req, res) => {
   const { id } = req.params;
 
