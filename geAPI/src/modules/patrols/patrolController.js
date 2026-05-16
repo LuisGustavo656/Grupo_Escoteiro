@@ -22,11 +22,12 @@ exports.createPatrol = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-// Listar as Patrulhas de um Ramo específico
+// Listar TODAS as Patrulhas de um Ramo (Ativas e Desativadas)
 exports.getPatrolsByBranch = async (req, res) => {
   const { branch_id } = req.params;
 
   try {
+    // Removemos o "AND status = 'ativa'" para o Front receber tudo e decidir como filtrar
     const result = await pool.query(
       "SELECT * FROM patrols WHERE branch_id = $1 ORDER BY name",
       [branch_id]
