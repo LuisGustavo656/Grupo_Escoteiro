@@ -1,3 +1,5 @@
+const pool = require("../../config/database");
+
 exports.createPatrol = async (req, res) => {
   const { name, branch_id } = req.body;
   // Junta as duas opções de cargo do usuário em uma só para facilitar
