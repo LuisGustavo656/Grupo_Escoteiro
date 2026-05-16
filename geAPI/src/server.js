@@ -1,76 +1,55 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const pool = require("./config/database");
-const authMiddleware = require("./middleware/authMiddleware");
-const app = express();
 const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken"); // ✅ 1. Movido para o topo do arquivo!
+
+const pool = require("./config/database");
+
+// ✅ 2. Seus middlewares OFICIAIS e unificados
+const authMiddleware = require("./middleware/authMiddleware");
 const roleMiddleware = require("./middleware/roleMiddleware");
+
+// Seus módulos de rotas
 const branchRoutes = require("./modules/branches/branchRoutes");
 const userRoutes = require('./modules/users/userRoutes');
 const financeRoutes = require('./modules/finances/financeRoutes');
 const authRoutes = require('./modules/auth/authRoutes');
 const memberRoutes = require('./modules/members/memberRoutes');
 const patrolRoutes = require('./modules/patrols/patrolRoutes');
+
+const app = express();
 const PORT = process.env.PORT || 3000;
+
 app.use(cors());
 app.use(express.json());
+
+// Endpoints principais
 app.use('/auth', authRoutes);
 app.use("/branches", branchRoutes);
 app.use('/users', userRoutes);
 app.use('/finances', financeRoutes);
 app.use('/members', memberRoutes);
 app.use('/patrols', patrolRoutes);
-// ====== MIDDLEWARES DE SEGURANÇA ======
 
-// 1. Verifica se o token JWT do usuário é válido
-function autenticarToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Pega o token após a palavra "Bearer"
-
-  if (!token) {
-    return res.status(401).json({ error: "Acesso negado. Token não fornecido." });
-  }
-
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: "Token inválido ou expirado." });
-    }
-    req.user = user; // Salva as informações do usuário logado na requisição (ex: id, global_role)
-    next();
-  });
-}
-
-// 2. Verifica se o cargo do usuário logado é permitido para a rota
-const verificarCargo = (cargosPermitidos) => {
-  return (req, res, next) => {
-    // req.user foi preenchido logo acima pelo 'autenticarToken'
-    const usuarioCargo = req.user ? req.user.global_role : null; 
-
-    if (!usuarioCargo || !cargosPermitidos.includes(usuarioCargo)) {
-      return res.status(403).json({ 
-        error: "Acesso negado. Você não tem o nível de permissão necessário." 
-      });
-    }
-
-    next();
-  };
-};
-
-// ======================================
-
+// Teste de conexão com o Banco
 app.get("/test", async (req, res) => {
-  const result = await pool.query("SELECT NOW()");
-  res.json(result.rows[0]);
+  try {
+    const result = await pool.query("SELECT NOW()");
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
-app.post("/register", autenticarToken, verificarCargo(["presidente"]), async (req, res) => {
+
+// ✅ 3. Rota de Registro usando os middlewares corretos do projeto
+app.post("/register", authMiddleware, roleMiddleware(["presidente"]), async (req, res) => {
   try {
     const { name, email, password, global_role } = req.body;
     const cargoFinal = global_role || "chefe";
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Salvamos com must_change_password = true
     const result = await pool.query(
       `INSERT INTO users (name, email, password, global_role, must_change_password)
        VALUES ($1, $2, $3, $4, true)
@@ -84,8 +63,8 @@ app.post("/register", autenticarToken, verificarCargo(["presidente"]), async (re
     res.status(500).json({ error: "Erro ao criar usuário" });
   }
 });
-const jwt = require("jsonwebtoken");
 
+// Rota de Login direta organizada
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -100,27 +79,24 @@ app.post("/login", async (req, res) => {
     }
 
     const user = result.rows[0];
-
     const validPassword = await bcrypt.compare(password, user.password);
 
     if (!validPassword) {
       return res.status(401).json({ error: "Senha inválida" });
     }
 
-    // 1. Incluímos o 'must_change_password' no payload do JWT
     const token = jwt.sign(
       {
         id: user.id,
         global_role: user.global_role,
         branch_id: user.branch_id,
         branch_role: user.branch_role,
-        must_change_password: user.must_change_password // Guardado de forma segura no Token
+        must_change_password: user.must_change_password 
       },
       process.env.JWT_SECRET,
       { expiresIn: "8h" }
     );
 
-    // 2. Devolvemos o token E os dados do usuário para o front-end
     res.json({ 
       token,
       user: {
@@ -129,27 +105,26 @@ app.post("/login", async (req, res) => {
         global_role: user.global_role,
         mustChangePassword: user.must_change_password 
       }
-    });
+    }); 
 
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Erro no servidor ao tentar fazer login" });
   }
 }); 
+
+// Rotas de checagem rápida
 app.get("/me", authMiddleware, (req, res) => {
   res.json({
     message: "Rota protegida funcionando",
     user: req.user
   });
 });
-app.get(
-  "/admin-only",
-  authMiddleware,
-  roleMiddleware(["ADMIN"]),
-  (req, res) => {
-    res.json({ message: "Você é ADMIN 😎" });
-  }
-);
+
+app.get("/admin-only", authMiddleware, roleMiddleware(["ADMIN"]), (req, res) => {
+  res.json({ message: "Você é ADMIN 😎" });
+});
+
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });
