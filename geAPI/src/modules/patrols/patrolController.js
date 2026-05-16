@@ -59,23 +59,43 @@ exports.getPatrolsByBranch = async (req, res) => {
   }
 };
 
-// Atualizar os dados de uma Patrulha (ex: renomear)
+// Atualizar os dados de uma Patrulha (Renomear e alterar membros)
 exports.updatePatrol = async (req, res) => {
   const { id } = req.params;
-  const { name } = req.body; 
+  
+  // Agora lemos TUDO que o app manda: nome e lista de membros
+  const { name, membros, members } = req.body; 
+  const listaMembros = membros || members || [];
 
   try {
+    // 1. Regra de Negócio: Atualiza o status
+    const novoStatus = listaMembros.length > 0 ? 'ativa' : 'desativada';
+
+    // 2. Atualiza o Nome e o Status no banco
     const result = await pool.query(
-      "UPDATE patrols SET name = $1 WHERE id = $2 RETURNING *",
-      [name, id]
+      "UPDATE patrols SET name = $1, status = $2 WHERE id = $3 RETURNING *",
+      [name, novoStatus, id]
     );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: "Patrulha não encontrada." });
     }
 
+    // 3. Limpa a patrulha (tira todo mundo)
+    await pool.query("UPDATE members SET patrol_id = NULL WHERE patrol_id = $1", [id]);
+
+    // 4. Recoloca apenas os jovens que vieram na lista do app
+    if (listaMembros.length > 0) {
+      for (const membroId of listaMembros) {
+        await pool.query(
+          "UPDATE members SET patrol_id = $1 WHERE id = $2",
+          [id, membroId]
+        );
+      }
+    }
+
     res.json({
-      message: "Patrulha atualizada com sucesso!",
+      message: "Patrulha e membros atualizados com sucesso!",
       patrol: result.rows[0]
     });
   } catch (err) {
