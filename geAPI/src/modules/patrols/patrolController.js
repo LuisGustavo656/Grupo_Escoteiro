@@ -1,38 +1,83 @@
 const pool = require("../../config/database");
 
 exports.createPatrol = async (req, res) => {
-  const { name, branch_id } = req.body;
-  // Junta as duas opções de cargo do usuário em uma só para facilitar
+  // Agora recebemos a lista de membros do Front-end (aceita 'membros' ou 'members')
+  const { name, branch_id, membros, members } = req.body;
+  const listaMembros = membros || members || [];
+
+  // 🛡️ Barricada de segurança de Ramos
   const userRole = req.user.global_role || req.user.branch_role;
   if (req.user && (userRole === 'chefe' || userRole === 'CHEFE DE SEÇÃO' || userRole === 'presidente')) {   
-    // Se não for presidente, exige que o Ramo do Chefe seja igual ao da patrulha
     if (userRole !== 'presidente' && Number(req.user.branch_id) !== Number(branch_id)) {
       return res.status(403).json({ 
         error: "Acesso Negado: Um chefe só pode criar patrulhas dentro do seu próprio ramo!" 
       });
     }
   }
+
   try {
+    // 🔥 Regra de Negócio: Nasce ativa se tiver jovens, ou desativada se estiver vazia
+    const initialStatus = listaMembros.length > 0 ? 'ativa' : 'desativada';
+
+    // 1. Cria a patrulha já com o status correto
     const result = await pool.query(
-      "INSERT INTO patrols (name, branch_id) VALUES ($1, $2) RETURNING *",
-      [name, branch_id]
+      "INSERT INTO patrols (name, branch_id, status) VALUES ($1, $2, $3) RETURNING *",
+      [name, branch_id, initialStatus]
     );
-    res.status(201).json(result.rows[0]);
+    
+    const novaPatrulha = result.rows[0];
+
+    // 2. Vincula os jovens na tabela correta ('members')
+    if (listaMembros.length > 0) {
+      for (const membroId of listaMembros) {
+        await pool.query(
+          "UPDATE members SET patrol_id = $1 WHERE id = $2",
+          [novaPatrulha.id, membroId]
+        );
+      }
+    }
+
+    res.status(201).json(novaPatrulha);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
+
 // Listar TODAS as Patrulhas de um Ramo (Ativas e Desativadas)
 exports.getPatrolsByBranch = async (req, res) => {
   const { branch_id } = req.params;
 
   try {
-    // Removemos o "AND status = 'ativa'" para o Front receber tudo e decidir como filtrar
+    // Traz todas as patrulhas para o Front-end decidir como filtrar e exibir
     const result = await pool.query(
       "SELECT * FROM patrols WHERE branch_id = $1 ORDER BY name",
       [branch_id]
     );
     res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Atualizar os dados de uma Patrulha (ex: renomear)
+exports.updatePatrol = async (req, res) => {
+  const { id } = req.params;
+  const { name } = req.body; 
+
+  try {
+    const result = await pool.query(
+      "UPDATE patrols SET name = $1 WHERE id = $2 RETURNING *",
+      [name, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Patrulha não encontrada." });
+    }
+
+    res.json({
+      message: "Patrulha atualizada com sucesso!",
+      patrol: result.rows[0]
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
