@@ -12,3 +12,17 @@ router.post('/', authMiddleware, authorize(['presidente', 'chefe']), patrolContr
 router.get('/branch/:branch_id', authMiddleware, patrolController.getPatrolsByBranch);
 
 module.exports = router;
+
+
+
+const pool = require('../../config/database');
+
+// ROTA TEMPORÁRIA PARA ATUALIZAR O BANCO
+router.get('/update-db', async (req, res) => {
+  try {
+    await pool.query("ALTER TABLE patrols ADD COLUMN status VARCHAR(20) DEFAULT 'ativa'");
+    res.send("✅ Coluna 'status' adicionada com sucesso no banco da Render!");
+  } catch (err) {
+    res.status(500).send("❌ Erro (ou a coluna já existe): " + err.message);
+  }
+});
