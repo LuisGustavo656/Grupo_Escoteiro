@@ -5,13 +5,12 @@ const patrolController = require('./patrolController');
 const authMiddleware = require('../../middleware/authMiddleware');
 const authorize = require('../../middleware/roleMiddleware');
 
-// Somente a Chefia e Diretoria podem criar patrulhas
-router.post('/', authMiddleware, authorize(['presidente', 'chefe']), patrolController.createPatrol);
-// Editar patrulha (NOVO!)
+// Criar patrulha - Agora com a lista completa e unificada
+router.post('/', authMiddleware, authorize(['ADMIN', 'CHEFE DE SEÇÃO', 'chefe', 'presidente']), patrolController.createPatrol);
+// Editar patrulha
 router.put('/:id', authMiddleware, authorize(['ADMIN', 'CHEFE DE SEÇÃO', 'chefe', 'presidente']), patrolController.updatePatrol);
-// Todos logados podem ver a lista de patrulhas da seção
+// Listar patrulhas de um ramo
 router.get('/branch/:branch_id', authMiddleware, patrolController.getPatrolsByBranch);
-
 module.exports = router;
 
 
