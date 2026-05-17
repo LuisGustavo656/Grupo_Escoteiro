@@ -48,13 +48,21 @@ exports.getPatrolsByBranch = async (req, res) => {
   const { branch_id } = req.params;
 
   try {
-    // Traz todas as patrulhas para o Front-end decidir como filtrar e exibir
-    const result = await pool.query(
-      "SELECT * FROM patrols WHERE branch_id = $1 ORDER BY name",
-      [branch_id]
-    );
+    // Esta consulta traz a patrulha e cria uma array contendo os IDs dos membros associados a ela
+    const queryText = `
+      SELECT p.*, COALESCE(json_agg(m.id) FILTER (WHERE m.id IS NOT NULL), '[]') AS membros
+      FROM patrols p
+      LEFT JOIN members m ON m.patrol_id = p.id
+      WHERE p.branch_id = $1
+      GROUP BY p.id
+      ORDER BY p.name
+    `;
+
+    const result = await pool.query(queryText, [branch_id]);
+    
     res.json(result.rows);
   } catch (err) {
+    console.error("Erro ao buscar patrulhas com membros:", err);
     res.status(500).json({ error: err.message });
   }
 };
