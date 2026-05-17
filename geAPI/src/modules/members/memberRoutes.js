@@ -10,5 +10,6 @@ router.get('/branch/:branch_id', authMiddleware, memberController.getMembersByBr
 router.put('/:id', authMiddleware, memberController.updateMember);
 router.put('/:id/skills', memberController.updateMemberSkills);
 router.delete('/:id', authMiddleware, memberController.deleteMember);
-
+// Rota para disparar o cálculo inteligente de divisão de patrulhas por IA
+router.post('/balancear', authMiddleware, memberController.balancearPatrulhasComML);
 module.exports = router;
