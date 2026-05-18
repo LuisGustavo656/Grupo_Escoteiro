@@ -4,15 +4,20 @@ const financeController = require('./financeController');
 
 // 1. Nossos seguranças importados aqui no topo!
 const authMiddleware = require('../../middleware/authMiddleware');
-const authorize = require('../../middleware/roleMiddleware'); // <-- ESSA É A LINHA QUE EVITA O ERRO!
+const authorize = require('../../middleware/roleMiddleware');
 
-// 2. As rotas protegidas
-router.post('/', authMiddleware, authorize(['ADMIN', 'FINANCEIRO', 'CHEFE DE SEÇÃO']), financeController.createTransaction);
+// 2. As rotas protegidas com os cargos padronizados
 
-router.get('/', authMiddleware, authorize(['ADMIN', 'FINANCEIRO']), financeController.getAllFinances);
+// Criar transação (Chefes podem lançar gastos das suas patrulhas/ramos)
+router.post('/', authMiddleware, authorize(['ADMIN', 'presidente', 'FINANCEIRO', 'CHEFE DE SEÇÃO', 'chefe']), financeController.createTransaction);
 
-router.get('/branch/:branch_id', authMiddleware, authorize(['ADMIN', 'FINANCEIRO', 'CHEFE DE SEÇÃO']), financeController.getFinancesByBranch);
+// Ver TODAS as finanças do Grupo (Apenas a diretoria)
+router.get('/', authMiddleware, authorize(['ADMIN', 'presidente', 'FINANCEIRO']), financeController.getAllFinances);
 
-router.delete('/:id', authMiddleware, authorize(['ADMIN']), financeController.deleteTransaction);
+// Ver finanças de um Ramo específico (Diretoria + Chefes daquele ramo)
+router.get('/branch/:branch_id', authMiddleware, authorize(['ADMIN', 'presidente', 'FINANCEIRO', 'CHEFE DE SEÇÃO', 'chefe']), financeController.getFinancesByBranch);
+
+// Deletar transação (Só a diretoria pode apagar para evitar fraudes)
+router.delete('/:id', authMiddleware, authorize(['ADMIN', 'presidente', 'FINANCEIRO']), financeController.deleteTransaction);
 
 module.exports = router;
