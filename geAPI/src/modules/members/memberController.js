@@ -1,29 +1,57 @@
 const pool = require("../../config/database");
 const axios = require('axios');
-// Criar membro já com as notas direto no POST
+const pool = require("../../config/database");
+const axios = require('axios');
+function calcularIdade(dataNascimento) {
+  const hoje = new Date();
+  const nascimento = new Date(dataNascimento);
+  let idade = hoje.getFullYear() - nascimento.getFullYear();
+  const mes = hoje.getMonth() - nascimento.getMonth();
+  
+  // Se o mês atual for menor que o mês do aniversário, ou se for o mesmo mês mas o dia ainda não chegou, tira 1 ano
+  if (mes < 0 || (mes === 0 && hoje.getDate() < nascimento.getDate())) {
+    idade--;
+  }
+  return idade;
+}
+//Define o ID do banco baseado na idade e nas regras do escotismo
+function definirRamoPorIdade(idade) {
+  if (idade >= 6 && idade <= 10) return 2; // ID 2: Lobinho (6,5 a 10 anos)
+  if (idade >= 11 && idade <= 14) return 1; // ID 1: Escoteiro (11 a 14 anos)
+  if (idade >= 15 && idade <= 17) return 3; // ID 3: Sênior (15 a 17 anos)
+  // Se for 18+ seria Pioneiro/Chefe, mas vou retornar Sênior como teto por enquanto
+  return 3; 
+}
+// Criar membro já definindo o Ramo automaticamente pela IDADE
 exports.createMember = async (req, res) => {
   const { 
-    name, date_of_birth, registration_number, branch_id, 
+    name, date_of_birth, registration_number, 
     responsible_id, patrol_id, skill_fisico, skill_tecnico, skill_experiencia 
   } = req.body;
-
   try {
+  //O Back-end calcula a idade e força o Ramo correto!
+    const idade = calcularIdade(date_of_birth);
+    const branch_id_calculado = definirRamoPorIdade(idade);
     const result = await pool.query(
       `INSERT INTO members 
        (name, date_of_birth, registration_number, branch_id, responsible_id, patrol_id, skill_fisico, skill_tecnico, skill_experiencia) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
        RETURNING *`,
       [
-        name, date_of_birth, registration_number, branch_id, responsible_id, patrol_id,
+        name, date_of_birth, registration_number, 
+        branch_id_calculado, 
+        responsible_id, patrol_id,
         skill_fisico || 1, skill_tecnico || 1, skill_experiencia || 1
       ]
     );
-    res.status(201).json(result.rows[0]);
+    res.status(201).json({
+      message: `Jovem cadastrado com sucesso no Ramo correto (Idade calculada: ${idade} anos)`,
+      member: result.rows[0]
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
-
 // Listar todos os membros com joins
 exports.getAllMembers = async (req, res) => {
   try {
@@ -44,7 +72,6 @@ exports.getAllMembers = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
 // Filtrar membros por Ramo (Chefia) - Versão Blindada
 exports.getMembersByBranch = async (req, res) => {
   const { branch_id } = req.params;
@@ -56,7 +83,6 @@ exports.getMembersByBranch = async (req, res) => {
       });
     }
   }
-
   try {
     const result = await pool.query(`
       SELECT m.id, m.name, m.date_of_birth, m.registration_number, 
@@ -93,7 +119,6 @@ exports.updateMember = async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ message: "Membro não encontrado." });
     }
-
     res.json({
       message: "Membro atualizado com sucesso!",
       member: result.rows[0]
@@ -102,7 +127,6 @@ exports.updateMember = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
 // Lançar ou atualizar apenas as notas (Skills)
 exports.updateMemberSkills = async (req, res) => {
   const { id } = req.params;
@@ -137,7 +161,6 @@ exports.updateMemberSkills = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
 // Cadastro em Massa para o Algoritmo de ML
 exports.createMembersBulk = async (req, res) => {
   const members = req.body;
@@ -182,7 +205,6 @@ exports.createMembersBulk = async (req, res) => {
     client.release();
   }
 };
-
 // Excluir um escoteiro específico por ID
 exports.deleteMember = async (req, res) => {
   const { id } = req.params;

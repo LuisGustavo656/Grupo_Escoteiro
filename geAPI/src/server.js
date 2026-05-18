@@ -2,7 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken"); // ✅ 1. Movido para o topo do arquivo!
+const jwt = require("jsonwebtoken");
 
 const pool = require("./config/database");
 
