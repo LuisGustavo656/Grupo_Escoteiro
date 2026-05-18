@@ -1,7 +1,5 @@
 const pool = require("../../config/database");
 const axios = require('axios');
-const pool = require("../../config/database");
-const axios = require('axios');
 function calcularIdade(dataNascimento) {
   const hoje = new Date();
   const nascimento = new Date(dataNascimento);
