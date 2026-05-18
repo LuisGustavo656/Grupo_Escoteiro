@@ -45,9 +45,18 @@ exports.getAllMembers = async (req, res) => {
   }
 };
 
-// Filtrar membros por Ramo (Chefia)
+// Filtrar membros por Ramo (Chefia) - Versão Blindada
 exports.getMembersByBranch = async (req, res) => {
   const { branch_id } = req.params;
+  const userRole = req.user.global_role || req.user.branch_role || '';
+  if (userRole.toLowerCase() !== 'presidente' && userRole.toLowerCase() !== 'admin') {
+    if (Number(req.user.branch_id) !== Number(branch_id)) {
+      return res.status(403).json({ 
+        error: "Acesso Negado: Você só tem permissão para ver os jovens do seu próprio ramo!" 
+      });
+    }
+  }
+
   try {
     const result = await pool.query(`
       SELECT m.id, m.name, m.date_of_birth, m.registration_number, 
@@ -60,6 +69,7 @@ exports.getMembersByBranch = async (req, res) => {
       WHERE m.branch_id = $1
       ORDER BY m.name
     `, [branch_id]);
+    
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
