@@ -3,14 +3,11 @@ const pool = require("../../config/database");
 // 1. Criar um novo registro financeiro (Receita ou Despesa)
 exports.createTransaction = async (req, res) => {
   const { description, amount, type, transaction_date, branch_id } = req.body;
-  
-  // 🔥 SEGURANÇA EXTRA: Pega quem está criando direto do Token (ninguém falsifica)
+  //SEGURANÇA EXTRA: Pega quem está criando direto do Token (ninguém falsifica)
   const user_id = req.user.id; 
-
-  // --- 🔒 BARRICADA DE SEGURANÇA DE RAMO ---
+  // ---  BARRICADA DE SEGURANÇA DE RAMO ---
   const userRole = (req.user.global_role || req.user.branch_role || '').toLowerCase();
   const userBranchId = req.user.branch_id;
-
   // Se NÃO for da diretoria (admin, financeiro ou presidente)...
   if (userRole !== 'admin' && userRole !== 'financeiro' && userRole !== 'presidente') {
     // ...Impede que ele lance gastos na conta de outro ramo!
@@ -21,7 +18,6 @@ exports.createTransaction = async (req, res) => {
     }
   }
   // -----------------------------------------
-
   try {
     const result = await pool.query(
       `INSERT INTO finances (description, amount, type, transaction_date, branch_id, user_id) 
@@ -35,12 +31,11 @@ exports.createTransaction = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
 // 2. Listar TODAS as finanças (Visão Geral do Grupo Escoteiro)
 exports.getAllFinances = async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT f.id, f.description, f.amount, f.type, f.transaction_date, 
+      SELECT f.id, f.description, f.amount, f.type, f.transaction_date, f.branch_id,
              b.name AS branch_name, u.name AS user_name
       FROM finances f
       LEFT JOIN branches b ON f.branch_id = b.id
@@ -53,15 +48,12 @@ exports.getAllFinances = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
 // 3. Listar finanças de um RAMO ESPECÍFICO
 exports.getFinancesByBranch = async (req, res) => {
   const { branch_id } = req.params;
-
-  // --- 🔒 BARRICADA DE SEGURANÇA CORRIGIDA ---
+  // ---  BARRICADA DE SEGURANÇA CORRIGIDA ---
   const userRole = (req.user.global_role || req.user.branch_role || '').toLowerCase();
   const userBranchId = req.user.branch_id; 
-
   // Se NÃO for da diretoria...
   if (userRole !== 'admin' && userRole !== 'financeiro' && userRole !== 'presidente') {
     // E tentar ver um ramo que não é o dele, block!
@@ -71,10 +63,9 @@ exports.getFinancesByBranch = async (req, res) => {
       });
     }
   }
-
   try {
     const result = await pool.query(`
-      SELECT f.id, f.description, f.amount, f.type, f.transaction_date, 
+      SELECT f.id, f.description, f.amount, f.type, f.transaction_date, f.branch_id,
              u.name AS user_name
       FROM finances f
       LEFT JOIN users u ON f.user_id = u.id
@@ -87,7 +78,6 @@ exports.getFinancesByBranch = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
 // 4. Deletar um registro (caso alguém cadastre errado)
 exports.deleteTransaction = async (req, res) => {
   const { id } = req.params;
