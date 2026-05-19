@@ -116,3 +116,22 @@ exports.updatePatrol = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+// Listar TODAS as patrulhas do Grupo Escoteiro (Visão do Presidente/Admin)
+exports.getAllPatrols = async (req, res) => {
+  try {
+    const queryText = `
+      SELECT p.*, COALESCE(json_agg(m.id) FILTER (WHERE m.id IS NOT NULL), '[]') AS membros
+      FROM patrols p
+      LEFT JOIN members m ON m.patrol_id = p.id
+      GROUP BY p.id
+      ORDER BY p.name
+    `;
+
+    const result = await pool.query(queryText);
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Erro ao buscar todas as patrulhas:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
