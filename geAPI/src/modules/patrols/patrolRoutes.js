@@ -17,7 +17,7 @@ router.put('/:id', authMiddleware, authorize(['ADMIN', 'CHEFE DE SEÇÃO', 'chef
 // Listar patrulhas de um ramo
 router.get('/branch/:branch_id', authMiddleware, patrolController.getPatrolsByBranch);
 
-// ROTA ADICIONADA: Balancear patrulhas usando a Inteligência Artificial (ML)
-router.post('/balancear', authMiddleware, authorize(['ADMIN', 'CHEFE DE SEÇÃO', 'chefe', 'presidente']), patrolController.balancearPatrulhasComML);
+//  Veja que no final agora está balancearPatrolsComML
+router.post('/balancear', authMiddleware, authorize(['ADMIN', 'CHEFE DE SEÇÃO', 'chefe', 'presidente']), patrolController.balancearPatrolsComML);
 
 module.exports = router;
