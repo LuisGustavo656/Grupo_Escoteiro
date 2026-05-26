@@ -137,25 +137,21 @@ exports.getAllPatrols = async (req, res) => {
   }
 };
 
-// FUNÇÃO DE INTELIGÊNCIA ARTIFICIAL ADICIONADA AQUI NO FINAL:
-exports.balancearPatrulhasComML = async (req, res) => {
+exports.balancearPatrolsComML = async (req, res) => {
   const { branch_id, quantidade_grupos } = req.body;
 
   if (!branch_id || !quantidade_grupos) {
-    return res.status(400).json({ error: "Os campos branch_id e quantidade_grupos são obrigatórios." });
+    return res.status(400).json({ error: "Campos obrigatórios ausentes." });
   }
 
   try {
-    // Filtro para buscar apenas jovens SEM patrulha
     const membrosResult = await pool.query(
       `SELECT id, name, skill_fisico, skill_tecnico, skill_experiencia 
-       FROM members 
-       WHERE branch_id = $1 AND patrol_id IS NULL`, 
+       FROM members WHERE branch_id = $1 AND patrol_id IS NULL`, 
       [branch_id]
     );
 
     const membros = membrosResult.rows;
-
     if (membros.length === 0) {
       return res.status(404).json({ error: "Não há membros sem patrulha disponíveis." });
     }
@@ -171,6 +167,7 @@ exports.balancearPatrulhasComML = async (req, res) => {
       }))
     };
 
+    // CORREÇÃO: ASPAS ADICIONADAS AQUI
     console.log(`🤖 Enviando ${membros.length} membros para o modelo de ML...`);
     const urlML = 'https://mlrender-8jl0.onrender.com/gerar-grupos';
     
@@ -178,16 +175,17 @@ exports.balancearPatrulhasComML = async (req, res) => {
       headers: { 'Content-Type': 'application/json' }
     });
 
+    // CORREÇÃO: Garante que o App sempre receba um array em 'resultado'
+    const dadosIA = respostaML.data;
+    const listaMembros = dadosIA.membros || dadosIA.grupos || dadosIA || [];
+
     res.json({
       message: "Patrulhas balanceadas com sucesso!",
-      resultado: respostaML.data
+      resultado: listaMembros 
     });
 
   } catch (err) {
     console.error("❌ Erro ao integrar com o ML:", err.message);
-    res.status(500).json({ 
-      error: "Falha ao processar balanceamento.",
-      details: err.message 
-    });
+    res.status(500).json({ error: "Falha ao processar balanceamento.", details: err.message });
   }
 };
