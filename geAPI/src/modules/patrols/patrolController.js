@@ -1,4 +1,5 @@
 const pool = require("../../config/database");
+const axios = require('axios');
 
 exports.createPatrol = async (req, res) => {
   const { name, branch_id, membros, members } = req.body;
@@ -13,7 +14,7 @@ exports.createPatrol = async (req, res) => {
   }
 
   try {
-    // 🔥 2. NOVA BARRICADA: Limite Máximo de Patrulhas
+    // 2. NOVA BARRICADA: Limite Máximo de Patrulhas
     const LIMITE_PATRULHAS = 4; // Mude esse número para o limite que vocês quiserem
 
     // O banco de dados conta quantas patrulhas esse ramo já tem
@@ -133,5 +134,60 @@ exports.getAllPatrols = async (req, res) => {
   } catch (err) {
     console.error("Erro ao buscar todas as patrulhas:", err);
     res.status(500).json({ error: err.message });
+  }
+};
+
+// FUNÇÃO DE INTELIGÊNCIA ARTIFICIAL ADICIONADA AQUI NO FINAL:
+exports.balancearPatrulhasComML = async (req, res) => {
+  const { branch_id, quantidade_grupos } = req.body;
+
+  if (!branch_id || !quantidade_grupos) {
+    return res.status(400).json({ error: "Os campos branch_id e quantidade_grupos são obrigatórios." });
+  }
+
+  try {
+    // Filtro para buscar apenas jovens SEM patrulha
+    const membrosResult = await pool.query(
+      `SELECT id, name, skill_fisico, skill_tecnico, skill_experiencia 
+       FROM members 
+       WHERE branch_id = $1 AND patrol_id IS NULL`, 
+      [branch_id]
+    );
+
+    const membros = membrosResult.rows;
+
+    if (membros.length === 0) {
+      return res.status(404).json({ error: "Não há membros sem patrulha disponíveis." });
+    }
+
+    const dadosParaIA = {
+      quantidade_grupos: Number(quantidade_grupos),
+      membros: membros.map(m => ({
+        id: m.id,
+        name: m.name,
+        skill_fisico: Number(m.skill_fisico || 1),
+        skill_tecnico: Number(m.skill_tecnico || 1),
+        skill_experiencia: Number(m.skill_experiencia || 1)
+      }))
+    };
+
+    console.log(`🤖 Enviando ${membros.length} membros para o modelo de ML...`);
+    const urlML = 'https://mlrender-8jl0.onrender.com/gerar-grupos';
+    
+    const respostaML = await axios.post(urlML, dadosParaIA, {
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    res.json({
+      message: "Patrulhas balanceadas com sucesso!",
+      resultado: respostaML.data
+    });
+
+  } catch (err) {
+    console.error("❌ Erro ao integrar com o ML:", err.message);
+    res.status(500).json({ 
+      error: "Falha ao processar balanceamento.",
+      details: err.message 
+    });
   }
 };

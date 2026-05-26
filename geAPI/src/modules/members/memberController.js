@@ -226,24 +226,30 @@ exports.deleteMember = async (req, res) => {
   }
 };
 
-// Chamar a Inteligência Artificial no Render para organizar os NOVATOS
+// Chamar a Inteligência Artificial no Render para reorganizar as patrulhas
 exports.balancearPatrulhasComML = async (req, res) => {
   const { branch_id, quantidade_grupos } = req.body;
+
   if (!branch_id || !quantidade_grupos) {
-    return res.status(400).json({ error: "Os campos branch_id e quantidade_grupos são obrigatórios." });
+    return res.status(400).json({ error: "Os campos branch_id and quantidade_grupos são obrigatórios." });
   }
+
   try {
+    // 1. Busca os jovens do ramo específico com suas respectivas notas de skills
     const membrosResult = await pool.query(
       `SELECT id, name, skill_fisico, skill_tecnico, skill_experiencia 
        FROM members 
-       WHERE branch_id = $1 AND patrol_id IS NULL`, 
+       WHERE branch_id = $1`,
       [branch_id]
     );
+
     const membros = membrosResult.rows;
+
     if (membros.length === 0) {
-      return res.status(404).json({ error: "Não há membros sem patrulha disponíveis para balancear neste ramo." });
+      return res.status(404).json({ error: "Nenhum membro encontrado para este ramo." });
     }
-    // Monta a estrutura para o Python
+
+    // 2. Monta a estrutura de dados para enviar para a API de Python
     const dadosParaIA = {
       quantidade_grupos: Number(quantidade_grupos),
       membros: membros.map(m => ({
@@ -254,23 +260,25 @@ exports.balancearPatrulhasComML = async (req, res) => {
         skill_experiencia: Number(m.skill_experiencia || 1)
       }))
     };
-    // Dispara para o Render da IA
-    console.log(`🤖 Enviando ${membros.length} novatos para o modelo de ML...`);
+
+    // 3. Dispara os dados para o Render do Python
+    console.log("🤖 Enviando dados para o modelo de ML no Render...");
     const urlML = 'https://mlrender-8jl0.onrender.com/gerar-grupos';
     
     const respostaML = await axios.post(urlML, dadosParaIA, {
       headers: { 'Content-Type': 'application/json' }
     });
 
+    // 4. Retorna o resultado balanceado direto para o App React Native
     res.json({
-      message: "Jovens sem patrulha balanceados com sucesso!",
+      message: "Patrulhas balanceadas com Inteligência Artificial!",
       resultado: respostaML.data
     });
 
   } catch (err) {
     console.error("❌ Erro ao integrar com o ML:", err.message);
     res.status(500).json({ 
-      error: "Falha ao processar balanceamento.",
+      error: "Falha ao processar balanceamento com a API de Machine Learning.",
       details: err.message 
     });
   }
