@@ -139,27 +139,37 @@ exports.getAllPatrols = async (req, res) => {
 
 exports.balancearPatrolsComML = async (req, res) => {
   const { branch_id, quantidade_grupos } = req.body;
+
   if (!branch_id || !quantidade_grupos) {
     return res.status(400).json({ error: "Campos obrigatórios ausentes." });
   }
+
   try {
     const membrosResult = await pool.query(
       `SELECT id, name, skill_fisico, skill_tecnico, skill_experiencia 
        FROM members WHERE branch_id = $1 AND patrol_id IS NULL`, 
       [branch_id]
     );
+
     const membros = membrosResult.rows;
     if (membros.length === 0) {
       return res.status(404).json({ error: "Não há membros sem patrulha disponíveis." });
     }
-    const mediaPorPatrulha = membros.length / Number(quantidade_grupos);
+
+    // 🔥 BARRICADA DO LIMITE DE 8 JOVENS POR PATRULHA
+    const numGrupos = Number(quantidade_grupos);
+    const mediaPorPatrulha = membros.length / numGrupos;
+    
     if (mediaPorPatrulha > 8) {
       return res.status(400).json({ 
-        error: `Não é possível alocar! Você tem ${membros.length} jovens sem patrulha. Se dividir em ${quantidade_grupos} grupo(s), as patrulhas passarão do limite máximo de 8 membros. Aumente a quantidade de patrulhas.` 
+        error: `Não é possível alocar! Você tem ${membros.length} jovens sem patrulha. Se dividir em ${numGrupos} grupo(s), as patrulhas passarão do limite máximo de 8 membros. Aumente a quantidade de patrulhas.` 
       });
     }
+    // Calculamos o limite exato para forçar o Python a criar a quantidade de grupos que o App quer.
+    const limiteCalculado = Math.ceil(membros.length / numGrupos);
+
     const dadosParaIA = {
-      quantidade_grupos: Number(quantidade_grupos),
+      limite_por_grupo: limiteCalculado, // Mandamos o limite que "hackeia" a matemática do Python!
       membros: membros.map(m => ({
         id: m.id,
         name: m.name,
@@ -168,17 +178,22 @@ exports.balancearPatrolsComML = async (req, res) => {
         skill_experiencia: Number(m.skill_experiencia || 1)
       }))
     };
-    console.log(`🤖 Enviando ${membros.length} membros para o modelo de ML...`);
+
+    console.log(`🤖 Enviando ${membros.length} membros para o ML forçando limite de ${limiteCalculado} por grupo...`);
     const urlML = 'https://mlrender-8jl0.onrender.com/gerar-grupos';
+    
     const respostaML = await axios.post(urlML, dadosParaIA, {
       headers: { 'Content-Type': 'application/json' }
     });
+
     const dadosIA = respostaML.data;
     const listaMembros = dadosIA.membros || dadosIA.grupos || dadosIA || [];
+
     res.json({
       message: "Patrulhas balanceadas com sucesso!",
       resultado: listaMembros 
     });
+
   } catch (err) {
     console.error("❌ Erro ao integrar com o ML:", err.message);
     res.status(500).json({ error: "Falha ao processar balanceamento.", details: err.message });
