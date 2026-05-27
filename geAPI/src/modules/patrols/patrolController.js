@@ -139,23 +139,25 @@ exports.getAllPatrols = async (req, res) => {
 
 exports.balancearPatrolsComML = async (req, res) => {
   const { branch_id, quantidade_grupos } = req.body;
-
   if (!branch_id || !quantidade_grupos) {
     return res.status(400).json({ error: "Campos obrigatórios ausentes." });
   }
-
   try {
     const membrosResult = await pool.query(
       `SELECT id, name, skill_fisico, skill_tecnico, skill_experiencia 
        FROM members WHERE branch_id = $1 AND patrol_id IS NULL`, 
       [branch_id]
     );
-
     const membros = membrosResult.rows;
     if (membros.length === 0) {
       return res.status(404).json({ error: "Não há membros sem patrulha disponíveis." });
     }
-
+    const mediaPorPatrulha = membros.length / Number(quantidade_grupos);
+    if (mediaPorPatrulha > 8) {
+      return res.status(400).json({ 
+        error: `Não é possível alocar! Você tem ${membros.length} jovens sem patrulha. Se dividir em ${quantidade_grupos} grupo(s), as patrulhas passarão do limite máximo de 8 membros. Aumente a quantidade de patrulhas.` 
+      });
+    }
     const dadosParaIA = {
       quantidade_grupos: Number(quantidade_grupos),
       membros: membros.map(m => ({
@@ -166,24 +168,17 @@ exports.balancearPatrolsComML = async (req, res) => {
         skill_experiencia: Number(m.skill_experiencia || 1)
       }))
     };
-
-    // CORREÇÃO: ASPAS ADICIONADAS AQUI
     console.log(`🤖 Enviando ${membros.length} membros para o modelo de ML...`);
     const urlML = 'https://mlrender-8jl0.onrender.com/gerar-grupos';
-    
     const respostaML = await axios.post(urlML, dadosParaIA, {
       headers: { 'Content-Type': 'application/json' }
     });
-
-    // CORREÇÃO: Garante que o App sempre receba um array em 'resultado'
     const dadosIA = respostaML.data;
     const listaMembros = dadosIA.membros || dadosIA.grupos || dadosIA || [];
-
     res.json({
       message: "Patrulhas balanceadas com sucesso!",
       resultado: listaMembros 
     });
-
   } catch (err) {
     console.error("❌ Erro ao integrar com o ML:", err.message);
     res.status(500).json({ error: "Falha ao processar balanceamento.", details: err.message });
