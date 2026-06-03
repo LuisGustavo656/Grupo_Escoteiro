@@ -1,29 +1,37 @@
 const pool = require("../../config/database");
 
-// 1. Criar um novo registro financeiro (Receita ou Despesa)
+//Criar um novo registro financeiro (Receita ou Despesa)
 exports.createTransaction = async (req, res) => {
-  const { description, amount, type, transaction_date, branch_id } = req.body;
-  //SEGURANÇA EXTRA: Pega quem está criando direto do Token (ninguém falsifica)
+  const { description, amount, type, transaction_date, branch_id, category } = req.body;
   const user_id = req.user.id; 
-  // ---  BARRICADA DE SEGURANÇA DE RAMO ---
   const userRole = (req.user.global_role || req.user.branch_role || '').toLowerCase();
   const userBranchId = req.user.branch_id;
-  // Se NÃO for da diretoria (admin, financeiro ou presidente)...
+//Segurança de Ramo e Caixa Geral
   if (userRole !== 'admin' && userRole !== 'financeiro' && userRole !== 'presidente') {
-    // ...Impede que ele lance gastos na conta de outro ramo!
     if (Number(userBranchId) !== Number(branch_id)) {
       return res.status(403).json({ 
         error: "Acesso Negado: Você só pode lançar finanças para o seu próprio ramo!" 
       });
     }
   }
-  // -----------------------------------------
+
+  // Trava do "Evento de Ramo"
+  if (category && category.toLowerCase() === 'evento de ramo' && !branch_id) {
+    return res.status(400).json({ 
+      error: "Para registrar um 'Evento de Ramo', é obrigatório informar o Ramo!" 
+    });
+  }
+
+  //Se vier vazio, vira NULL no banco. Se não vier categoria, vira 'outros'
+  const finalBranchId = branch_id || null; 
+  const finalCategory = category || 'outros';
+
   try {
     const result = await pool.query(
-      `INSERT INTO finances (description, amount, type, transaction_date, branch_id, user_id) 
-       VALUES ($1, $2, $3, $4, $5, $6) 
+      `INSERT INTO finances (description, amount, type, transaction_date, branch_id, user_id, category) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7) 
        RETURNING *`,
-      [description, amount, type, transaction_date, branch_id, user_id]
+      [description, amount, type, transaction_date, finalBranchId, user_id, finalCategory]
     );
 
     res.status(201).json(result.rows[0]);
@@ -31,11 +39,11 @@ exports.createTransaction = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-// 2. Listar TODAS as finanças (Visão Geral do Grupo Escoteiro)
+// Listar TODAS as finanças (Visão Geral do Grupo Escoteiro)
 exports.getAllFinances = async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT f.id, f.description, f.amount, f.type, f.transaction_date, f.branch_id,
+      SELECT f.id, f.description, f.amount, f.type, f.transaction_date, f.branch_id, f.category,
              b.name AS branch_name, u.name AS user_name
       FROM finances f
       LEFT JOIN branches b ON f.branch_id = b.id
@@ -48,24 +56,24 @@ exports.getAllFinances = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-// 3. Listar finanças de um RAMO ESPECÍFICO
+// Listar finanças de um RAMO ESPECÍFICO
 exports.getFinancesByBranch = async (req, res) => {
   const { branch_id } = req.params;
-  // ---  BARRICADA DE SEGURANÇA CORRIGIDA ---
+  
   const userRole = (req.user.global_role || req.user.branch_role || '').toLowerCase();
   const userBranchId = req.user.branch_id; 
-  // Se NÃO for da diretoria...
+  
   if (userRole !== 'admin' && userRole !== 'financeiro' && userRole !== 'presidente') {
-    // E tentar ver um ramo que não é o dele, block!
     if (Number(userBranchId) !== Number(branch_id)) {
       return res.status(403).json({ 
         message: "Acesso Negado! Você só tem permissão para visualizar o caixa da sua própria seção." 
       });
     }
   }
+  
   try {
     const result = await pool.query(`
-      SELECT f.id, f.description, f.amount, f.type, f.transaction_date, f.branch_id,
+      SELECT f.id, f.description, f.amount, f.type, f.transaction_date, f.branch_id, f.category,
              u.name AS user_name
       FROM finances f
       LEFT JOIN users u ON f.user_id = u.id
@@ -78,7 +86,8 @@ exports.getFinancesByBranch = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-// 4. Deletar um registro (caso alguém cadastre errado)
+
+// Deletar um registro (caso alguém cadastre errado)
 exports.deleteTransaction = async (req, res) => {
   const { id } = req.params;
 
