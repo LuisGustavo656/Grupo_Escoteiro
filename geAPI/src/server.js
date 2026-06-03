@@ -19,6 +19,7 @@ const memberRoutes = require('./modules/members/memberRoutes');
 const patrolRoutes = require('./modules/patrols/patrolRoutes');
 const requestRoutes = require('./modules/requests/requestRoutes');
 const activityRoutes = require('./modules/activities/activityRoutes');
+const minuteRoutes = require('./modules/minutes/minuteRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -35,6 +36,7 @@ app.use('/members', memberRoutes);
 app.use('/patrols', patrolRoutes);
 app.use('/requests', requestRoutes);
 app.use('/activities', activityRoutes);
+app.use('/minutes', minuteRoutes);
 
 // Teste de conexão com o Banco
 app.get("/test", async (req, res) => {
