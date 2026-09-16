@@ -2,34 +2,48 @@ const pool = require("../../config/database");
 
 // Gerar as mensalidades do mês pra todos os membros ativos de um ramo
 // (idempotente: rodar de novo no mesmo mês não duplica)
+// due_day = dia do vencimento (ex: 10). Se não vier, usa 10 como padrão.
 exports.generateDues = async (req, res) => {
-  const { branch_id, reference_month, amount } = req.body;
+  const { branch_id, reference_month, amount, due_day } = req.body;
 
   if (!branch_id || !reference_month || !amount) {
     return res.status(400).json({ error: "branch_id, reference_month e amount são obrigatórios." });
   }
 
+  const dia = String(due_day || 10).padStart(2, '0');
+  // reference_month chega como 'YYYY-MM-01' -> troca só o dia
+  const dueDate = `${reference_month.slice(0, 7)}-${dia}`;
+
   try {
     const result = await pool.query(
       `
-      INSERT INTO dues (member_id, branch_id, reference_month, amount, status)
-      SELECT id, $1, $2, $3, 'pendente'
+      INSERT INTO dues (member_id, branch_id, reference_month, due_date, amount, status)
+      SELECT id, $1, $2, $3, $4, 'pendente'
       FROM members
       WHERE branch_id = $1
       ON CONFLICT (member_id, reference_month) DO NOTHING
       RETURNING *
       `,
-      [branch_id, reference_month, amount]
+      [branch_id, reference_month, dueDate, amount]
     );
 
     res.status(201).json({
-      message: `${result.rows.length} mensalidade(s) gerada(s).`,
+      message: `${result.rows.length} mensalidade(s) gerada(s), vencimento em ${dueDate}.`,
       dues: result.rows
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
+
+// Trecho reaproveitado em todas as listagens: calcula "atrasado" na hora,
+// sem precisar de cron job guardando isso fisicamente no banco.
+const STATUS_CALCULADO = `
+  CASE
+    WHEN d.status = 'pendente' AND d.due_date < CURRENT_DATE THEN 'atrasado'
+    ELSE d.status
+  END AS status_calculado
+`;
 
 // Listar mensalidades de um mês (Visão Geral do Grupo Escoteiro)
 exports.getAllDues = async (req, res) => {
@@ -41,7 +55,7 @@ exports.getAllDues = async (req, res) => {
 
   try {
     const result = await pool.query(`
-      SELECT d.*, m.name AS member_name, b.name AS branch_name
+      SELECT d.*, ${STATUS_CALCULADO}, m.name AS member_name, b.name AS branch_name
       FROM dues d
       JOIN members m ON m.id = d.member_id
       LEFT JOIN branches b ON b.id = d.branch_id
@@ -77,7 +91,7 @@ exports.getDuesByBranch = async (req, res) => {
 
   try {
     const result = await pool.query(`
-      SELECT d.*, m.name AS member_name
+      SELECT d.*, ${STATUS_CALCULADO}, m.name AS member_name
       FROM dues d
       JOIN members m ON m.id = d.member_id
       WHERE d.branch_id = $1 AND d.reference_month = $2
@@ -96,7 +110,10 @@ exports.getDuesByMember = async (req, res) => {
 
   try {
     const result = await pool.query(
-      `SELECT * FROM dues WHERE member_id = $1 ORDER BY reference_month DESC`,
+      `SELECT d.*, ${STATUS_CALCULADO}
+       FROM dues d
+       WHERE d.member_id = $1
+       ORDER BY d.reference_month DESC`,
       [member_id]
     );
     res.json(result.rows);
@@ -153,6 +170,8 @@ exports.payDue = async (req, res) => {
 };
 
 // Resumo rápido (quantos pagos / pendentes / atrasados e valores)
+// Usa o status calculado (não o bruto), pra "atrasado" aparecer certo mesmo
+// sem nenhum processo automático rodando.
 exports.getSummary = async (req, res) => {
   const { month, branch_id } = req.query;
 
@@ -163,15 +182,18 @@ exports.getSummary = async (req, res) => {
   try {
     const params = [month];
     let query = `
-      SELECT status, COUNT(*)::int AS total, COALESCE(SUM(amount), 0) AS valor
-      FROM dues
-      WHERE reference_month = $1
+      SELECT
+        ${STATUS_CALCULADO.replace('AS status_calculado', 'AS status')},
+        COUNT(*)::int AS total,
+        COALESCE(SUM(d.amount), 0) AS valor
+      FROM dues d
+      WHERE d.reference_month = $1
     `;
     if (branch_id) {
       params.push(branch_id);
-      query += ` AND branch_id = $${params.length}`;
+      query += ` AND d.branch_id = $${params.length}`;
     }
-    query += ' GROUP BY status';
+    query += ' GROUP BY 1';
 
     const result = await pool.query(query, params);
     res.json(result.rows);
