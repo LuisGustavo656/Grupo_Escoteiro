@@ -18,7 +18,7 @@ const patrolRoutes = require("./modules/patrols/patrolRoutes");
 const requestRoutes = require("./modules/requests/requestRoutes");
 const activityRoutes = require("./modules/activities/activityRoutes");
 const minuteRoutes = require("./modules/minutes/minuteRoutes");
-const dueRoutes = require('./modules/dues/dueRoutes');
+const dueRoutes = require('./modules/dues/Dueroutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
