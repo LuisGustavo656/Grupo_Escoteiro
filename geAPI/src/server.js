@@ -22,6 +22,7 @@ const dueRoutes = require('./modules/dues/Dueroutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const allowedOrigins = (process.env.ALLOWED_ORIGIN || '').split(',').map(o => o.trim());
 
 // ─── Segurança: headers HTTP ─────────────────────────────────────────────────
 app.use(helmet());
@@ -30,8 +31,17 @@ app.use(helmet());
 // Coloque a URL do seu app no .env como ALLOWED_ORIGIN
 // Ex: ALLOWED_ORIGIN=https://meu-app.com
 // Em desenvolvimento pode deixar http://localhost:3000 ou a porta do seu front
+// ─── CORS: só aceita origem conhecida ────────────────────────────────────────
+// Coloque as URLs permitidas no .env como ALLOWED_ORIGIN, separadas por vírgula
+// Ex: ALLOWED_ORIGIN=https://meu-app.com,http://localhost:8081
 const corsOptions = {
-  origin: process.env.ALLOWED_ORIGIN || "http://localhost:3000",
+  origin: (origin, callback) => {
+    // sem "origin" = app mobile nativo, Postman, curl → sempre libera
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error("Não permitido pelo CORS"));
+  },
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
 };
