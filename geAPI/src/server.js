@@ -21,6 +21,7 @@ const minuteRoutes = require("./modules/minutes/minuteRoutes");
 const dueRoutes = require('./modules/dues/Dueroutes');
 
 const app = express();
+app.set('trust proxy', 1); // ← linha nova, resolve o erro do rate-limit no Render
 const PORT = process.env.PORT || 3000;
 const allowedOrigins = (process.env.ALLOWED_ORIGIN || '').split(',').map(o => o.trim());
 
