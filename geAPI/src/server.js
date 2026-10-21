@@ -69,6 +69,7 @@ app.use("/patrols", patrolRoutes);
 app.use("/requests", requestRoutes);
 app.use("/activities", activityRoutes);
 app.use("/minutes", minuteRoutes);
+app.use("/dues", dueRoutes); 
 
 // ─── Rota de checagem de conexão com o banco ─────────────────────────────────
 app.get("/test", async (req, res) => {
