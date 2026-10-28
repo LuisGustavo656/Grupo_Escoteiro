@@ -69,3 +69,31 @@ exports.deleteActivity = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+
+ // Busca o histórico de atividades para contextualizar a IA
+exports.getActivityHistoryForAI = async (branchId) => {
+  const id = Number(branchId);
+
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    throw new Error("Ramo inválido.");
+  }
+
+  const result = await pool.query(
+    `
+    SELECT
+      id,
+      title,
+      LEFT(COALESCE(description, ''), 1500) AS description,
+      activity_date::text AS activity_date
+    FROM activities
+    WHERE branch_id = $1
+      AND activity_date <= CURRENT_DATE
+    ORDER BY activity_date DESC, id DESC
+    LIMIT 20
+    `,
+    [id]
+  );
+
+  return result.rows;
+};
