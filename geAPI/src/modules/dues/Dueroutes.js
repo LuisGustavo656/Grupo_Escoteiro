@@ -4,6 +4,10 @@ const dueController = require('./Duecontroller');
 const authMiddleware = require('../../middleware/authMiddleware');
 const authorize = require('../../middleware/roleMiddleware');
 
+const financeRoles = ['ADMIN', 'presidente', 'FINANCEIRO'];
+router.get('/members', authMiddleware, authorize(financeRoles), dueController.getMembersForDues);
+router.post('/generate-member', authMiddleware, authorize(financeRoles), dueController.generateMemberDue);
+
 // Gerar mensalidades do mês (só quem mexe em dinheiro)
 router.post('/generate', authMiddleware, authorize(['ADMIN', 'presidente', 'FINANCEIRO']), dueController.generateDues);
 

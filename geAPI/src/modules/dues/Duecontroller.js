@@ -1,5 +1,77 @@
 const pool = require("../../config/database");
 
+// Retorna apenas os dados necessários ao seletor financeiro.
+exports.getMembersForDues = async (req, res) => {
+  const branchId = Number(req.query.branch_id);
+  if (!Number.isSafeInteger(branchId) || branchId <= 0) {
+    return res.status(400).json({ error: "Informe um ramo válido." });
+  }
+  try {
+    const result = await pool.query(
+      'SELECT id, name, branch_id FROM members WHERE branch_id = $1 ORDER BY name, id',
+      [branchId]
+    );
+    return res.json(result.rows);
+  } catch (err) {
+    console.error('Falha ao listar membros para mensalidades:', err);
+    return res.status(500).json({ error: "Não foi possível carregar os membros." });
+  }
+};
+
+// Esta rota exige um membro. Nunca utiliza o gerador em lote como alternativa.
+exports.generateMemberDue = async (req, res) => {
+  const body = req.body || {};
+  const branchId = Number(body.branch_id);
+  const memberId = Number(body.member_id);
+  const amount = Number(body.amount);
+  const day = Number(body.due_day);
+  const reference = typeof body.reference_month === 'string' ? body.reference_month : '';
+  if (!Number.isSafeInteger(branchId) || branchId <= 0 ||
+      !Number.isSafeInteger(memberId) || memberId <= 0) {
+    return res.status(400).json({ error: "Selecione um ramo e um membro válidos." });
+  }
+  if (!Number.isFinite(amount) || amount <= 0 || amount > 10000000 ||
+      Math.abs(amount * 100 - Math.round(amount * 100)) > 0.000001) {
+    return res.status(400).json({ error: "Informe um valor positivo com até duas casas decimais." });
+  }
+  if (!/^\d{4}-\d{2}-01$/.test(reference)) {
+    return res.status(400).json({ error: "Informe a referência no formato YYYY-MM-01." });
+  }
+  const year = Number(reference.slice(0, 4));
+  const month = Number(reference.slice(5, 7));
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  if (year < 1000 || month < 1 || month > 12 || !Number.isInteger(day) || day < 1 || day > lastDay) {
+    return res.status(400).json({ error: "Informe uma data de vencimento válida para o mês de referência." });
+  }
+  const dueDate = `${reference.slice(0, 7)}-${String(day).padStart(2, '0')}`;
+  try {
+    const member = await pool.query(
+      'SELECT id, name FROM members WHERE id = $1 AND branch_id = $2',
+      [memberId, branchId]
+    );
+    if (!member.rows.length) {
+      return res.status(404).json({ error: "Membro não encontrado no ramo selecionado." });
+    }
+    const result = await pool.query(
+      `INSERT INTO dues (member_id, branch_id, reference_month, due_date, amount, status)
+       SELECT id, branch_id, $3, $4, $5, 'pendente'
+       FROM members WHERE id = $1 AND branch_id = $2
+       ON CONFLICT (member_id, reference_month) DO NOTHING RETURNING *`,
+      [memberId, branchId, reference, dueDate, amount]
+    );
+    if (!result.rows.length) {
+      return res.status(409).json({ error: "Nenhuma cobrança criada: o membro já possui mensalidade neste mês ou mudou de ramo. Atualize os dados antes de tentar novamente." });
+    }
+    return res.status(201).json({
+      message: `Mensalidade gerada para ${member.rows[0].name}, com vencimento em ${dueDate.split('-').reverse().join('/')}.`,
+      dues: result.rows
+    });
+  } catch (err) {
+    console.error('Falha ao gerar mensalidade individual:', err);
+    return res.status(500).json({ error: "Não foi possível gerar a mensalidade. Atualize os dados antes de tentar novamente." });
+  }
+};
+
 // Gerar as mensalidades do mês pra todos os membros ativos de um ramo
 // (idempotente: rodar de novo no mesmo mês não duplica)
 // due_day = dia do vencimento (ex: 10). Se não vier, usa 10 como padrão.
