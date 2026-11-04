@@ -195,7 +195,13 @@ exports.balancearPatrolsComML = async (req, res) => {
     });
 
   } catch (err) {
-    console.error("❌ Erro ao integrar com o ML:", err.message);
-    res.status(500).json({ error: "Falha ao processar balanceamento.", details: err.message });
+    console.error("[PATRULHAS] Diagnóstico:", {
+  status: error.response?.status,
+  url: error.config?.url,
+  retryAfter: error.response?.headers?.["retry-after"],
+  mensagem: error.response?.data?.error ||
+            error.response?.data?.detail ||
+            error.message
+});
   }
 };

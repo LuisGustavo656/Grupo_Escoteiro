@@ -147,10 +147,14 @@ exports.suggestActivities = async (req, res) => {
     });
 
   } catch (error) {
-    console.error(
-      'Erro ao gerar sugestões:',
-      error.message
-    );
+    console.error("[RF08] Diagnóstico:", {
+  status: error.response?.status,
+  url: error.config?.url,
+  retryAfter: error.response?.headers?.["retry-after"],
+  mensagem: error.response?.data?.error ||
+            error.response?.data?.detail ||
+            error.message
+      });
 
     if (error.code === 'ECONNABORTED') {
       return res.status(504).json({
