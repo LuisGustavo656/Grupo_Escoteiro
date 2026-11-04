@@ -180,7 +180,7 @@ exports.balancearPatrolsComML = async (req, res) => {
     };
 
     console.log(`🤖 Enviando ${membros.length} membros para o ML forçando limite de ${limiteCalculado} por grupo...`);
-    const urlML = 'https://mlrender-8jl0.onrender.com/gerar-grupos';
+  const urlML = `${process.env.ML_BASE_URL.replace(/\/+$/, '')}/gerar-grupos`;
     
     const respostaML = await axios.post(urlML, dadosParaIA, {
       headers: { 'Content-Type': 'application/json' }
