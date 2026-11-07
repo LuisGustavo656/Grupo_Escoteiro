@@ -164,12 +164,12 @@ exports.suggestActivities = async (req, res) => {
 
     if (error.response) {
       return res.status(502).json({
-        error: 'Serviço de IA indisponível ou com falha.'
-      });
+  error: `Não foi possível gerar sugestões. Erro do serviço de IA: ${status}.`
+});
     }
 
-    return res.status(500).json({
-      error: 'Não foi possível gerar as sugestões agora.'
-    });
+    return res.status(502).json({
+  error: 'Não foi possível estabelecer comunicação com a IA_GEFI.'
+});
   }
 };
