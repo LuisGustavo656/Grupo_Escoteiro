@@ -194,14 +194,16 @@ exports.balancearPatrolsComML = async (req, res) => {
       resultado: listaMembros 
     });
 
-  } catch (err) {
-    console.error("[PATRULHAS] Diagnóstico:", {
-  status: error.response?.status,
-  url: error.config?.url,
-  retryAfter: error.response?.headers?.["retry-after"],
-  mensagem: error.response?.data?.error ||
-            error.response?.data?.detail ||
-            error.message
-});
-  }
+} catch (err) {
+  console.error('[ML] Erro no balanceamento:', {
+    message: err.message,
+    status: err.response?.status,
+    code: err.code,
+    url: err.config?.url
+  });
+
+  return res.status(500).json({
+    error: 'Falha ao processar balanceamento.'
+  });
+}
 };
