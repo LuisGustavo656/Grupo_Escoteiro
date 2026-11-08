@@ -4,6 +4,7 @@ const dueController = require('./Duecontroller');
 const authMiddleware = require('../../middleware/authMiddleware');
 const authorize = require('../../middleware/roleMiddleware');
 
+// Rotas individuais: separadas da geração em lote para evitar cobranças acidentais.
 const financeRoles = ['ADMIN', 'presidente', 'FINANCEIRO'];
 router.get('/members', authMiddleware, authorize(financeRoles), dueController.getMembersForDues);
 router.post('/generate-member', authMiddleware, authorize(financeRoles), dueController.generateMemberDue);
@@ -25,5 +26,8 @@ router.get('/summary', authMiddleware, authorize(['ADMIN', 'presidente', 'FINANC
 
 // Marcar como paga
 router.put('/:id/pay', authMiddleware, authorize(['ADMIN', 'presidente', 'FINANCEIRO']), dueController.payDue);
+
+router.put('/:id', authMiddleware, authorize(financeRoles), dueController.updateDue);
+router.delete('/:id', authMiddleware, authorize(financeRoles), dueController.deleteDue);
 
 module.exports = router;

@@ -273,3 +273,51 @@ exports.getSummary = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+
+// A mesma trava de linha usada no pagamento impede editar/excluir durante a baixa.
+async function mutateUnpaidDue(req, res, remove) {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ error: "Mensalidade inválida." });
+  const { amount, due_date } = req.body || {};
+  if (!remove) {
+    const value = Number(amount);
+    const parts = typeof due_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(due_date) ? due_date.split('-').map(Number) : [];
+    const [year, month, day] = parts;
+    if (!Number.isFinite(value) || value <= 0 || value > 10000000 || Math.abs(value * 100 - Math.round(value * 100)) > 0.000001 ||
+        !year || year < 1000 || month < 1 || month > 12 || day < 1 || day > new Date(Date.UTC(year, month, 0)).getUTCDate()) {
+      return res.status(400).json({ error: "Informe valor positivo com até duas casas decimais e vencimento válido." });
+    }
+  }
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+    const result = await client.query("SELECT *, to_char(reference_month, 'YYYY-MM') AS reference_key FROM dues WHERE id = $1 FOR UPDATE", [id]);
+    const due = result.rows[0];
+    if (!due) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: "Mensalidade não encontrada. Atualize a lista." });
+    }
+    if (!['pendente', 'atrasado'].includes(due.status) || due.finance_id != null || due.payment_date != null) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: "Mensalidade com pagamento registrado não pode ser editada ou excluída. É necessário tratar o estorno financeiro primeiro." });
+    }
+    if (!remove && due_date.slice(0, 7) !== due.reference_key) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: "O vencimento deve estar dentro do mês de referência." });
+    }
+    if (remove) await client.query('DELETE FROM dues WHERE id = $1', [id]);
+    else await client.query('UPDATE dues SET amount = $1, due_date = $2 WHERE id = $3', [Number(amount), due_date, id]);
+    await client.query('COMMIT');
+    return res.json({ message: remove ? "Mensalidade excluída." : "Mensalidade atualizada." });
+  } catch (err) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    console.error('Falha ao alterar mensalidade:', err);
+    return res.status(500).json({ error: "Não foi possível concluir. Atualize os dados antes de tentar novamente." });
+  } finally {
+    if (client) client.release();
+  }
+}
+exports.updateDue = (req, res) => mutateUnpaidDue(req, res, false);
+exports.deleteDue = (req, res) => mutateUnpaidDue(req, res, true);
