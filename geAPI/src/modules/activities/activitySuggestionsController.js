@@ -147,29 +147,64 @@ exports.suggestActivities = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("[RF08] Diagnóstico:", {
-  status: error.response?.status,
-  url: error.config?.url,
-  retryAfter: error.response?.headers?.["retry-after"],
-  mensagem: error.response?.data?.error ||
-            error.response?.data?.detail ||
-            error.message
-      });
+    const status = error.response?.status;
+    const dados = error.response?.data;
 
+    const motivo =
+      typeof dados === 'string'
+        ? dados
+        : dados?.error ||
+          dados?.detail ||
+          dados?.message ||
+          error.message;
+
+    console.error('[RF08] Diagnóstico:', {
+      status: status || 'sem resposta HTTP',
+      url: error.config?.url,
+      code: error.code,
+      retryAfter: error.response?.headers?.['retry-after'],
+      mensagem: motivo
+    });
+
+    // Serviço de IA demorou demais
     if (error.code === 'ECONNABORTED') {
       return res.status(504).json({
         error: 'A IA demorou demais para responder.'
       });
     }
 
+    // A IA respondeu com erro HTTP
     if (error.response) {
+      if (status === 429) {
+        return res.status(429).json({
+          error:
+            'O serviço de IA atingiu um limite de requisições. ' +
+            'Tente novamente mais tarde.'
+        });
+      }
+
+      if (status === 401 || status === 403) {
+        return res.status(502).json({
+          error:
+            'Falha na autenticação entre o backend e a IA_GEFI.'
+        });
+      }
+
+      if (status === 422) {
+        return res.status(502).json({
+          error:
+            'Os dados enviados à IA_GEFI foram rejeitados.'
+        });
+      }
+
       return res.status(502).json({
-  error: `Não foi possível gerar sugestões. Erro do serviço de IA: ${status}.`
-});
+        error: `Falha no serviço de IA (HTTP ${status}).`
+      });
     }
 
-    return res.status(502).json({
-  error: 'Não foi possível estabelecer comunicação com a IA_GEFI.'
-});
+    // Erro interno ou problema de comunicação
+    return res.status(500).json({
+      error: 'Não foi possível gerar sugestões.'
+    });
   }
 };
