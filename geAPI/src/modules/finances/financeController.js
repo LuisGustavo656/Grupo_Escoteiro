@@ -106,3 +106,150 @@ exports.deleteTransaction = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+
+ // Editar lançamento financeiro
+exports.updateTransaction = async (req, res) => {
+  const id = Number(req.params.id);
+  const body = req.body || {};
+
+  const description = String(body.description || '').trim();
+  const amount = Number(body.amount);
+  const type = body.type;
+  const date = String(body.transaction_date || '');
+  const category = String(body.category || 'outros').trim();
+
+  const branchId =
+    body.branch_id == null || body.branch_id === ''
+      ? null
+      : Number(body.branch_id);
+
+  // Validar data
+  const [year, month, day] = date.split('-').map(Number);
+
+  const validDate =
+    /^\d{4}-\d{2}-\d{2}$/.test(date) &&
+    year >= 1000 &&
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    day <= new Date(
+      Date.UTC(year, month, 0)
+    ).getUTCDate();
+
+  // Validar dados recebidos
+  if (
+    !Number.isSafeInteger(id) ||
+    id <= 0 ||
+    description.length < 3 ||
+    !Number.isFinite(amount) ||
+    amount <= 0 ||
+    amount > 10000000 ||
+    Math.abs(amount * 100 - Math.round(amount * 100)) > 0.000001 ||
+    !['receita', 'despesa'].includes(type) ||
+    !validDate ||
+    !category ||
+    (
+      branchId !== null &&
+      (
+        !Number.isSafeInteger(branchId) ||
+        branchId <= 0
+      )
+    )
+  ) {
+    return res.status(400).json({
+      error: 'Confira a descrição, o valor, o tipo, a data e o ramo.'
+    });
+  }
+
+  if (
+    category.toLowerCase() === 'evento de ramo' &&
+    !branchId
+  ) {
+    return res.status(400).json({
+      error: 'Para registrar um evento de ramo, selecione o ramo.'
+    });
+  }
+
+  let client;
+
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+
+    // Bloquear o lançamento durante a edição
+    const existing = await client.query(
+      'SELECT id FROM finances WHERE id = $1 FOR UPDATE',
+      [id]
+    );
+
+    if (!existing.rows.length) {
+      await client.query('ROLLBACK');
+
+      return res.status(404).json({
+        error: 'Lançamento não encontrado. Atualize a lista.'
+      });
+    }
+
+    // Impedir alteração de mensalidades pagas
+    const linkedDue = await client.query(
+      'SELECT id FROM dues WHERE finance_id = $1 LIMIT 1',
+      [id]
+    );
+
+    if (linkedDue.rows.length) {
+      await client.query('ROLLBACK');
+
+      return res.status(409).json({
+        error:
+          'Este lançamento está vinculado a uma mensalidade paga. ' +
+          'É necessário tratar o estorno antes de alterá-lo.'
+      });
+    }
+
+    // Atualizar lançamento
+    const updated = await client.query(
+      `UPDATE finances
+       SET description = $1,
+           amount = $2,
+           type = $3,
+           transaction_date = $4,
+           branch_id = $5,
+           category = $6
+       WHERE id = $7
+       RETURNING *`,
+      [
+        description,
+        amount,
+        type,
+        date,
+        branchId,
+        category,
+        id
+      ]
+    );
+
+    await client.query('COMMIT');
+
+    return res.json({
+      message: 'Lançamento atualizado com sucesso!',
+      transaction: updated.rows[0]
+    });
+
+  } catch (error) {
+    if (client) {
+      await client.query('ROLLBACK').catch(() => {});
+    }
+
+    console.error('Erro ao editar lançamento:', error);
+
+    return res.status(500).json({
+      error: 'Não foi possível salvar o lançamento.'
+    });
+
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+};

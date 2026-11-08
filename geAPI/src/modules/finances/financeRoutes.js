@@ -19,3 +19,6 @@ router.get('/branch/:branch_id', authMiddleware, authorize(['ADMIN', 'presidente
 // Deletar transação
 router.delete('/:id', authMiddleware, authorize(['ADMIN', 'presidente', 'FINANCEIRO']), financeController.deleteTransaction);
 module.exports = router;
+
+// Editar transação financeira
+router.put('/:id',authMiddleware,authorize(['ADMIN', 'presidente', 'FINANCEIRO']),financeController.updateTransaction);
